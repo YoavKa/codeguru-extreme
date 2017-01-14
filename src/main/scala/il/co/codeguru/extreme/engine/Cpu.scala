@@ -79,7 +79,24 @@ class Cpu(var state: CpuState, var machine: Machine) {
     case JE_JZ(shortLabel) => ???
     case JLE_JNG(shortLabel) => ???
     case JL_JNGE(shortLabel) => ???
-    case JMP(target) => ???
+
+    case JMP(target) => target match {
+      case ShortLabelOperand(offset) =>
+        state = state.setRegister16(IP, state.getRegister16(IP) + M86Word(offset))
+        15
+      case NearLabelOperand(offset) => offset match {
+        case offset: Immed16Operand =>
+          state = state.setRegister16(IP, state.getRegister16(IP) + offset.value)
+          15
+      }
+      case FarLabelOperand(offset, segment) => (offset, segment) match {
+        case (offset: Immed16Operand, segment: Immed16Operand) =>
+          state = state.setRegister16(IP, offset.value)
+          state = state.setRegister16(CS, segment.value)
+          15
+      }
+    }
+
     case JNBE_JA(shortLabel) => ???
     case JNB_JAE_JNC(shortLabel) => ???
     case JNE_JNZ(shortLabel) => ???
