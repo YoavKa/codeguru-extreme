@@ -43,6 +43,8 @@ trait RealModeMemory {
   def writeByte(address: RealModeAddress, value: M86Byte): RealModeMemory
 
   def writeWord(address: RealModeAddress, value: M86Word): RealModeMemory
+
+  def getTransferCost(address: RealModeAddress): Int
 }
 
 abstract class AbstractRealModeMemory extends RealModeMemory {
@@ -60,6 +62,10 @@ abstract class AbstractRealModeMemory extends RealModeMemory {
   def writeWord(address: RealModeAddress, value: M86Word): RealModeMemory = {
     val nextAddress: RealModeAddress = RealModeAddress(address.segment, address.offset + M86Word(1))
     writeByte(address, value.lowByte).writeByte(nextAddress, value.highByte)
+  }
+
+  def getTransferCost(address: RealModeAddress): Int = {
+    (address.linearAddress.value % 2) * 4
   }
 }
 

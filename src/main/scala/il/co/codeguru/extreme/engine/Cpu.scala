@@ -82,18 +82,30 @@ class Cpu(var state: CpuState, var machine: Machine) {
 
     case JMP(target) => target match {
       case ShortLabelOperand(offset) =>
-        state = state.setRegister16(IP, state.getRegister16(IP) + M86Word(offset))
+        state = state.setRegister16(IP, state.ip + M86Word(offset))
         15
       case NearLabelOperand(offset) => offset match {
         case offset: Immed16Operand =>
-          state = state.setRegister16(IP, state.getRegister16(IP) + offset.value)
+          state = state.setRegister16(IP, state.ip + offset.value)
           15
+        case offset: Reg16Operand =>
+          state = state.setRegister16(IP, state.getRegister16(offset.register))
+          11
+        case offset: Mem16Operand =>
+          state = state.setRegister16(IP, machine.memory.readWord(offset.address, execute = false))
+          18 + machine.memory.getTransferCost(offset.address) // + EA
       }
       case FarLabelOperand(offset, segment) => (offset, segment) match {
         case (offset: Immed16Operand, segment: Immed16Operand) =>
           state = state.setRegister16(IP, offset.value)
           state = state.setRegister16(CS, segment.value)
           15
+        case (offset: Mem16Operand, segment: Mem16Operand) =>
+          val offsetVal = machine.memory.readWord(offset.address, execute = false)
+          val segmentVal = machine.memory.readWord(segment.address, execute = false)
+          state = state.setRegister16(IP, offsetVal)
+          state = state.setRegister16(CS, segmentVal)
+          24 + machine.memory.getTransferCost(offset.address) + machine.memory.getTransferCost(segment.address) // + EA
       }
     }
 
