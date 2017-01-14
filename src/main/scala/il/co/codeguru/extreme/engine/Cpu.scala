@@ -189,6 +189,64 @@ class Cpu(var state: CpuState, var machine: Machine) {
     case XLAT(translateTable) => ???
     case XOR(destination, source) => ???
   }
+
+  private def calculateEffectiveAddress(memoryAddressing: MemoryAddressing, defaultSegment: M86Word): (RealModeAddress, Int) = {
+    def effectiveAddress(baseRegister: AddressBaseRegister = null,
+                         indexRegister: IndexRegister = null,
+                         displacement: M86Word = M86Word(0)): RealModeAddress = {
+      val segment: M86Word = baseRegister match {
+        case BP => state.ss
+        case _ => defaultSegment
+      }
+      val offset = (baseRegister match {
+        case BX => state.bx
+        case BP => state.bp
+        case _ => M86Word(0)
+      }) + (indexRegister match {
+        case DI => state.di
+        case SI => state.si
+        case _ => M86Word(0)
+      }) + displacement
+      new RealModeAddress(segment, offset)
+    }
+    // TODO add support for segment override
+    memoryAddressing match {
+      case MemoryDirectAddressing(offset) =>
+        (effectiveAddress(displacement = offset.value), 6)
+      case MemoryBaseAddressing(baseRegister) =>
+        (effectiveAddress(baseRegister = baseRegister), 5)
+      case MemoryBaseDisp8Addressing(baseRegister, displacement) =>
+        (effectiveAddress(baseRegister = baseRegister, displacement = M86Word(displacement.value)), 9)
+      case MemoryBaseDisp16Addressing(baseRegister, displacement) =>
+        (effectiveAddress(baseRegister = baseRegister, displacement = displacement.value), 9)
+      case MemoryIndexAddressing(indexRegister) =>
+        (effectiveAddress(indexRegister = indexRegister), 5)
+      case MemoryIndexDisp8Addressing(indexRegister, displacement) =>
+        (effectiveAddress(indexRegister = indexRegister, displacement = M86Word(displacement.value)), 9)
+      case MemoryIndexDisp16Addressing(indexRegister, displacement) =>
+        (effectiveAddress(indexRegister = indexRegister, displacement = displacement.value), 9)
+      case MemoryBaseIndexAddressing(baseRegister, indexRegister) =>
+        val address = effectiveAddress(baseRegister = baseRegister, indexRegister = indexRegister)
+        (baseRegister, indexRegister) match {
+          case (BP, DI) | (BX, SI) => (address, 7)
+          case (BP, SI) | (BX, DI) => (address, 8)
+        }
+      case MemoryBaseIndexDisp8Addressing(baseRegister, indexRegister, displacement) =>
+        val address = effectiveAddress(baseRegister, indexRegister, M86Word(displacement.value))
+        (baseRegister, indexRegister) match {
+          case (BP, DI) | (BX, SI) => (address, 11)
+          case (BP, SI) | (BX, DI) => (address, 12)
+        }
+      case MemoryBaseIndexDisp16Addressing(baseRegister, indexRegister, displacement) =>
+        val address = effectiveAddress(baseRegister, indexRegister, displacement.value)
+        (baseRegister, indexRegister) match {
+          case (BP, DI) | (BX, SI) => (address, 11)
+          case (BP, SI) | (BX, DI) => (address, 12)
+        }
+      case MemoryBaseReg8Addressing(baseRegister, displacement) =>
+        (effectiveAddress(baseRegister = baseRegister, displacement = M86Word(state.getRegister8(displacement))), 9)
+    }
+  }
 }
 
 class OpcodeFetcher(val cpu: Cpu) {
